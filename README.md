@@ -1,2 +1,2 @@
 # Spooky-Dookie
-An LUA Game &amp; Watch-style game.
+An Lua Game &amp; Watch-style game.
