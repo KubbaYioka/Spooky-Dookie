@@ -3,10 +3,14 @@ ghosts = {}
 ghostSpawnX = 0
 ghostSpawnY = 0
 
---ghostgo is 0 until the spawn animation goes for a second or 2. decreases with difficulty
+--number of allowed ghosts is equivalent to the difficulty.
+ghostNumber = difficulty
+
+--ghostgo is 0 until the spawn animation goes for a second or 2.
 
 -- tickerLevel is a set value for ghost movement which is determined by difficulty
 tickerLevel = 40
+
 --for timing between ghost steps
 ghostTicker = 0
 
@@ -19,84 +23,64 @@ spawnTimerNumber = 720
 --initial state for ghostTimer. Changes to 1 when loop runs once
 timerState = 0
 
-
 --two values provided by difficulty type passed to spawnTimerNumber. Selects a number between the two at random.
 lowerSec = 480
 upperSec = 720
 
-
-
 function ghostTimer(dt)
-    if timerState == 1 then
-        if ghostSpawnTimer ~= 0 then
-            ghostSpawnTimer = ghostSpawnTimer - 1
-        else
-            ghostParam()
+    if gameMode == 1 then
+        if timerState == 1 then
+            if ghostSpawnTimer > 0 then
+                ghostSpawnTimer = ghostSpawnTimer - 1
+            else
+                if #ghosts < difficulty then
+                    ghostParam()
+                    timerState = 0
+                else
+                    ghostSpawnTimer = spawnTimerNumber
+                    timerState = 0
+                end
+            end
+        else 
+            upperSec = upperSec / difficulty
+            lowerSec = lowerSec / difficulty
             spawnTimerNumber = math.random(lowerSec, upperSec)
             ghostSpawnTimer = spawnTimerNumber
+            timerState = 1
         end
-    else 
-        timerState = 1
-        upperSec = upperSec / difficultySet
-        lowerSec = lowerSec / difficultySet
-        spawnTimerNumber = math.random(lowerSec, upperSec)
-        ghostSpawnerTimer = spawnTimerNumber
     end
 end
 
---[[ Code moved to ghostUpdate()
-function ghostMoveCounter(dt)
-    --for i,g in ipairs(ghosts) do
-        if g.ticker > 0 then
-            g.ticker = g.ticker - 1
-        else
-            local gx, gy = g:getPosition()
-            g:setX(gx + dt * (g.ghostFacingRight and 100 or -100))
-            g.ticker = tickerLevel
-        end
-    --end
-end
---[[
-function ghostMoveCounter()
-    for i,g in ipairs(ghosts) do
-        local gx, gy = g:getPosition()
-        if g.ticker ~= 0 then
-            g.ticker = g.ticker - 1
-        else
-            if g.ghostFacingRight then
-                g:setX(gx + 100)
-                g.ticker = tickerLevel
-            else
-                g:setX(gx - 100)
-                g.ticker = tickerLevel
-            end
-        end
-    end
-end
-]]
 
 function ghostSpawn(x, y)
-local ghost = world:newRectangleCollider(x, y, 20, 20, {collision_class ="Bad"})
-    ghost.direction = 1 --[[1 can be replaced with a var for determined by what side they spawn on]]
-    ghost.speed = 100 --number of pixels the ghost moves
-    -- if statement sets ghostFacingRight boolean by its x spawn location. Determines what animation will be used.
-    ghost.ticker = tickerLevel
-    if ghostSpawnX == 25 then
-        ghost.ghostFacingRight = true
-    else
-        ghost.ghostFacingRight = false
+    if gameMode == 1 then
+        local ghost = world:newRectangleCollider(x, y, 20, 20, {collision_class ="Bad"})
+        local gx = x
+        local gy = y
+        ghost.speed = 100 --number of pixels the ghost moves
+        -- if statement sets ghostFacingRight boolean by its x spawn location. Determines what animation will be used.
+        ghost.ticker = tickerLevel
+        if gx == 15 then
+            ghost.ghostFacingRight = true
+            ghost.animation = animations.ghostLeftFlash
+        else
+            ghost.ghostFacingRight = false
+            ghost.animation = animations.ghostRightFlash
+        end
+        ghost.ghostGo = 0
+        ghost.ghostTimer = 0
+        ghost.hit = false
+        table.insert(ghosts, ghost)
+        love.audio.play(sounds.ghostAppear)
     end
-    ghost.ghostGo = 0
-    ghost.goTimer = 0
-    table.insert(ghosts, ghost)
 end
 
 function ghostParam()
 
     local rndX
     local rndY
-    local xTable = {25, 675}
-    local yTable = {25, 125, 225, 325}
+    local xTable = {15, 675}
+    local yTable = {70, 170, 270, 370}
 
     rndX = xTable[math.random(1, #xTable)]
     rndY = yTable[math.random(1, #yTable)]
@@ -108,51 +92,70 @@ function ghostParam()
 end
 
 function ghostUpdate(dt)
-    for i,g in ipairs(ghosts) do
-        local gx, gy = g:getPosition()
+    if gameMode == 1 then
+        for i,g in ipairs(ghosts) do
+            g.animation:update(dt)
+            if g.body then
+                if g.ghostGo >= 1 then
+                    local gx, gy = g:getPosition()
+                    if g.ghostFacingRight then
+                        -- note: ghostLeft is showing the ghost facing RIGHT because it originates on the left side, and travels right
+                        g.animation = animations.ghostLeft
+                    else
+                        g.animation = animations.ghostRight
+                    end
+                    local colliders = world:queryRectangleArea(gx-10, gy-10, 20, 20, {'Player'})
+                    if #colliders >0 then
+                        --implement delay 
+                        love.audio.play(sounds.playerHori)
+                        poopTimer = poopTimer - 5
+                    end
+                    local bColliders = world:queryRectangleArea(gx-10, gy-10, 20, 20, {'Bullets'})
+                    if #bColliders >0 then
+                        g.hit = true
+                    end
 
-        local colliders = world:queryRectangleArea(gx, gy-10, 20, 5, {'Player'})
-        if #colliders >0 then
-            love.audio.play(sounds.playerHori)
-        end
+                    if g.ticker > 0 then
+                        g.ticker = g.ticker - 1
+                    else
+                        g:setX(gx + (g.ghostFacingRight and 100 or -100))
+                        love.audio.play(sounds.ghostMove)
+                        g.ticker = tickerLevel
+                    end
+                    if g.ghostFacingRight then
 
-        if g.ticker > 0 then
-            g.ticker = g.ticker - 1
-        else
-            local gx, gy = g:getPosition()
-            g:setX(gx + dt * (g.ghostFacingRight and 100 or -100))
-            g.ticker = tickerLevel
-        end
-
-        if g.ghostFacingRight == true then
-
-            if gx == 735 then
-                g.body:destroy()
-                table.remove(ghosts, i)
-            end
-        else
-
-            if gx == -15 then
-                g.body:destroy()
-                table.remove(ghosts, i)
+                        if gx >= 735 then
+                            g.body:destroy()
+                            table.remove(ghosts, i)
+                        end
+                    else
+                        if gx <= -15 then
+                            g.body:destroy()
+                            table.remove(ghosts, i)
+                        end
+                    end
+                else
+                    if g.ghostTimer <= goTimer then
+                        g.ghostTimer = g.ghostTimer + 1
+                    else
+                        g.ghostGo = 1
+                    end
+                end
             end
         end
     end
 end
 
 function drawGhost()
-    for i,g in pairs(ghosts) do
-        local gx, gy = g:getPosition()
-        if g.ghostFacingRight == true then
-            -- note: ghostLeft is showing the ghost facing RIGHT because it originates on the left side, and travels right
-            g.animation = animations.ghostLeft
-        else
-            g.animation = animations.ghostRight
+    if #ghosts >= 1 then
+        for i,g in ipairs(ghosts) do
+            --if g.body then
+                local gx, gy = g:getPosition()
+                g.animation:draw(sprites.ghostGraphic, gx+5, gy-10, nil, nil, nil, sprites.ghostGraphic:getWidth() / 4, sprites.ghostGraphic:getHeight() / 4)
+                --location debug
+                gDebugPosX = gx
+                gDebugPosY = gy
+            --end
         end
-        g.animation:draw(sprites.ghostGraphic, gx, gy, 0, 1.2, 1.2, sprites.ghostGraphic:getWidth() / 4, sprites.ghostGraphic:getHeight() / 2)
-        --love.graphics.draw(drawable, x, y, r, sx, sy, ox, oy, ks, ky)
-        --location debug
-        gDebugPosX = gx
-        gDebugPosY = gy
     end
 end
